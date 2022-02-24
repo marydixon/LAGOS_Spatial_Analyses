@@ -1,8 +1,12 @@
 ---
 title: "LAGOS Spatial Analysis"
-author: "Matthew Ross"
-date: "9/11/2019"
-output: html_document
+author: "Mary Dixon"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
 editor_options: 
   chunk_output_type: console
 ---
@@ -10,9 +14,10 @@ editor_options:
 
 
 ```{r setup, include=FALSE}
+
 library(tidyverse) # Tidy packages
 library(sf) #Spatial package that can read and create shapefiles 
-library(mapview) #Interactive maps
+library(mapview); mapviewOptions(fgb = F) #Interactive maps
 library(LAGOSNE) #Lots and lots of clean lake data
 library(USAboundaries) #USA states and counties
 ```
@@ -26,19 +31,15 @@ library(USAboundaries) #USA states and counties
 
 ### First download and then specifically grab the locus (or site lat longs)
 
-```{r data-read}
+```{r data-read, warning = F, message = F}
 # #Lagos download script
-LAGOSNE::lagosne_get(dest_folder = LAGOSNE:::lagos_path())
-
+#LAGOSNE::lagosne_get(dest_folder = LAGOSNE:::lagos_path())
 
 #Load in lagos
 lagos <- lagosne_load()
 
 #Grab the lake centroid info
 lake_centers <- lagos$locus
-
-
-
 ```
 
 
@@ -65,8 +66,7 @@ subset_spatial <- spatial_lakes %>%
 subset_baser <- spatial_lakes[1:100,]
 
 #Dynamic mapviewer
-mapview(subset_spatial)
-
+mapview(subset_spatial, canvas = T)
 ```
 
 
@@ -82,7 +82,8 @@ minnesota <- states %>%
   st_transform(2163)
 
 #Subset lakes based on spatial position
-minnesota_lakes <- spatial_lakes[minnesota,]
+minnesota_lakes <- spatial_lakes[minnesota,] %>%
+  mutate(state = 'Minnesota')
 
 #Plotting the first 1000 lakes
 minnesota_lakes %>%
@@ -99,41 +100,68 @@ minnesota_lakes %>%
 ## 1) Show a map outline of Iowa and Illinois (similar to Minnesota map upstream)
 
 ```{r}
+iowa <- states %>%
+  filter(name == 'Iowa') %>%
+  st_transform(2163)
+
+illinois <- states %>%
+  filter(name == 'Illinois') %>%
+  st_transform(2163)
 
 
+iowa_lakes <- spatial_lakes[iowa,] %>%
+  mutate(state = 'Iowa') %>%
+  arrange(lake_area_ha)
+illinois_lakes <- spatial_lakes[illinois,] %>%
+  mutate(state = 'Illinois')%>%
+  arrange(lake_area_ha)
+
+
+mapview(iowa)
+mapview(illinois)
+mapview(iowa_lakes, canvas = T, zcol = 'lake_area_ha', layer.name = 'Lake Area (ha)')
+mapview(illinois_lakes, canvas = T, zcol = 'lake_area_ha', layer.name = 'Lake Area (ha)')
 
 ```
 
 
 
-## 2) Subset LAGOS data to these sites, how many sites are in Illinois and Iowa
-combined? How does this compare to Minnesota?
+## 2) Subset LAGOS data to these sites, how many sites are in Illinois and Iowa combined? How does this compare to Minnesota?
 
 ```{r}
+iowa_illinois<- rbind(iowa_lakes,illinois_lakes)
 
+nrow(iowa_illinois)
+nrow(minnesota_lakes)
 ```
 
+There are `r nrow(iowa_illinois)` sites in Illinois and Iowa combined. This is `r nrow(minnesota_lakes)-nrow(iowa_illinois)` fewer sites than Minnesota which has `r nrow(minnesota_lakes)` sites. 
 
 ## 3) What is the distribution of lake size in Iowa vs. Minnesota?
 
 - Here I want to see a histogram plot with lake size on x-axis and frequency on 
 y axis (check out geom_histogram)
 
-```{r}
+```{r, message = F}
+iowa_minnesota <- rbind(iowa_lakes,minnesota_lakes)
 
-
+ggplot(iowa_minnesota, aes(lake_area_ha, fill = state, position = "dodge")) +
+  geom_histogram() +
+  scale_x_log10() +
+  labs(x = 'Log of Lake Size (ha)', y = 'Frequency', title = 'Distribution of Lake Sizes in Iowa and Minnesota')
 ```
 
 
-## 4) Make an interactive plot of lakes in Iowa and Illinois and color them
-by lake area in hectares
+## 4) Make an interactive plot of lakes in Iowa and Illinois and color them by lake area in hectares
 
 ```{r}
-
+lake_area_states <- iowa_illinois %>%
+  mutate(log10_lake_area = log(lake_area_ha)) %>%
+  arrange(log10_lake_area) 
+mapview(lake_area_states, canvas = T, zcol = 'log10_lake_area', layer.name = 'Log 10 of the Lake Area (ha)')
 ```
 
 
-## 5) What other data sources might we use to understand how reservoirs and 
-natural lakes vary in size in these three states? 
+## 5) What other data sources might we use to understand how reservoirs and natural lakes vary in size in these three states? 
 
-
+We can look at Earth Engine to view a time lapse a body of water to see how it has changed over time. We can then use Climate Engine to make polygons (like we did for the Hayman fire recovery assignment) and use the remote sensing data to analyze the lakes. Images of lakes and reservoirs can be analyzed using an image analysis program, like Image J, to compare size. Canopeo is another open source image analysis software that is used to measure green area (usually used in leaf area index analysis). If images from Earth Engine were manipulated to have the lakes be colored green, then Canopeo can be used to measure the area. 
